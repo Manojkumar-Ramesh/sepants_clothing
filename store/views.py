@@ -4,12 +4,31 @@ from store.forms import RegistrationForm,LoginForm
 from django.contrib.auth import authenticate,login,logout
 from store.models import Product,BasketItem,Size
 from django.contrib import messages
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
+
+
 
 # Create your views here.
 
 # url: localhoast:8000/
 #method: get,post
 #form_class: RegistrationForm
+
+#decorators
+def signin_required(fn):
+    
+    def wrapper(request,*args,**kwargs):
+        if not request.user.is_authenticated:
+            messages.error(request,"invalid session")
+
+            return redirect("signin")
+        else:
+            return fn(request,*args,**kwargs)
+    return wrapper
+
+decs=[signin_required]
+
 
 
 class SignupView(View):
@@ -88,6 +107,14 @@ class BasketItemListView(View):
     def get(self,request,*args,**kwargs):
         qs=request.user.cart.cartitem.filter(is_order_placed=False)
         return render(request,"cart_list.html",{"data":qs})
+    
+
+class BasketItemRemoveView(View):
+    def get(self,request,*args,**kwargs):
+        id=kwargs.get("pk")
+        basket_item_object=BasketItem.objects.get(id=id)
+        basket_item_object.delete()
+        return redirect("basket-items")
 
 
 
