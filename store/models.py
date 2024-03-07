@@ -45,7 +45,7 @@ class Basket(models.Model):
     is_active=models.BooleanField(default=True)
 
     @property
-    def cart_items(self):   #--here--self=basket---
+    def cart_items(self):   #--here--self==basket---
         return self.cartitem.filter(is_order_placed=False)
     @property
     def cart_item_count(self):
@@ -87,6 +87,9 @@ class Order(models.Model):
     email=models.CharField(max_length=120,null=True)
     is_paid=models.BooleanField(default=False)
     total=models.PositiveIntegerField()
+    @property
+    def get_order_items(self):
+        return self.purchaseitems.all()
 
 class OrderItems(models.Model):
     order_object=models.ForeignKey(Order,on_delete=models.CASCADE,related_name="purchaseitems")
@@ -99,6 +102,8 @@ class OrderItems(models.Model):
         ("cancelled","cancelled")
     )
     status=models.CharField(max_length=200,choices=option,default="order-placed")
+
+
 
 
 

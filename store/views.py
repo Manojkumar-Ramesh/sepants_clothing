@@ -1,11 +1,13 @@
 from django.shortcuts import render,redirect
 from django.views.generic import View,TemplateView
-from store.forms import RegistrationForm,LoginForm
 from django.contrib.auth import authenticate,login,logout
-from store.models import Product,BasketItem,Size
 from django.contrib import messages
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
+
+from store.forms import RegistrationForm,LoginForm
+from store.models import Product,BasketItem,Size,Order,OrderItems
+from store.decorators import signin_required,owner_permission_required
 
 
 
@@ -16,18 +18,18 @@ from django.views.decorators.cache import never_cache
 #form_class: RegistrationForm
 
 #decorators
-def signin_required(fn):
+# def signin_required(fn):
     
-    def wrapper(request,*args,**kwargs):
-        if not request.user.is_authenticated:
-            messages.error(request,"invalid session")
+#     def wrapper(request,*args,**kwargs):
+#         if not request.user.is_authenticated:
+#             messages.error(request,"invalid session")
 
-            return redirect("signin")
-        else:
-            return fn(request,*args,**kwargs)
-    return wrapper
+#             return redirect("signin")
+#         else:
+#             return fn(request,*args,**kwargs)
+#     return wrapper
 
-decs=[signin_required]
+# decs=[signin_required]
 
 
 
@@ -66,13 +68,13 @@ class SignInView(View):
     
 # class IndexView(TemplateView):
 #     template_name="index.html"
-
+@method_decorator([signin_required,never_cache],name="dispatch")
 class IndexView(View):
     def get(self,request,*args,**kwargs):
         qs=Product.objects.all()
         return render(request,"index.html",{"data":qs})
         
-
+@method_decorator([signin_required,never_cache],name="dispatch")
 class ProductDetailView(View):
 
     def get(self,request,*args,**kwargs):
@@ -87,6 +89,7 @@ class HomeView(TemplateView):
 # add to basket
 #url:localhost:8000/products/{id}/add_to_basket
 #
+@method_decorator([signin_required,never_cache],name="dispatch")
 class AddToBasketView(View):
 
     def post(self,request,*args,**kwargs):
@@ -103,12 +106,14 @@ class AddToBasketView(View):
         )
         return redirect("index")
     
+@method_decorator([signin_required,never_cache],name="dispatch")
 class BasketItemListView(View):
     def get(self,request,*args,**kwargs):
         qs=request.user.cart.cartitem.filter(is_order_placed=False)
         return render(request,"cart_list.html",{"data":qs})
     
 
+@method_decorator([signin_required,owner_permission_required,never_cache],name="dispatch")
 class BasketItemRemoveView(View):
     def get(self,request,*args,**kwargs):
         id=kwargs.get("pk")
@@ -116,6 +121,7 @@ class BasketItemRemoveView(View):
         basket_item_object.delete()
         return redirect("basket-items")
     
+@method_decorator([signin_required,owner_permission_required,never_cache],name="dispatch")
 class CartItemUpdateQtyView(View):
     def post(self,request,*args,**kwargs):
         action=request.POST.get("counterbutton")
@@ -131,6 +137,7 @@ class CartItemUpdateQtyView(View):
             basket_item_object.save()
         return redirect("basket-items")
 
+@method_decorator([signin_required,never_cache],name="dispatch")
 class CheckOutView(View):
     def get(self,request,*args,**kwargs):
         return render(request,"checkout.html")
@@ -139,9 +146,47 @@ class CheckOutView(View):
         email=request.POST.get("email")
         phone=request.POST.get("phone")
         address=request.POST.get("address")
-        print(email,phone,address)
+
+        #creating order instance
+        order_obj=Order.objects.create(
+            user_object=request.user,
+            delivery_address=address,
+            phone=phone,
+            email=email,
+            total=request.user.cart.cart_total
+        )
+        #creating order item instance
+        try:
+            basket_items=request.user.cart.cart_items
+            for bi in basket_items:
+                OrderItems.objects.create(
+                    order_object=order_obj,
+                    basket_item_object=bi
+                )
+                bi.is_order_placed=True
+                bi.save()
+        except:
+            order_obj.delete()
         
-        return redirect("index")
+        finally:
+            # print(email,phone,address)
+            return redirect("index")
+
+@method_decorator([signin_required,never_cache],name="dispatch")
+class SignOutView(View):
+    def get(self,request,*args,**kwargs):
+        logout(request)
+        return redirect("signin")
+        
+
+class OderSummary(View):
+    def get(self,request,*args,**kwargs):
+        qs=Order.objects.filter(user_object=request.user)
+        return render(request,"order_summary.html",{"qs":qs})
+    
+
+    
+
 
 
 
